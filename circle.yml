@@ -1,0 +1,14 @@
+dependencies:
+
+  cache_directories:
+    - ~/.stack/
+    - .stack-work/
+
+  override:
+    - stack setup
+    - stack build --only-dependencies
+
+test:
+
+  override:
+    - stack build
