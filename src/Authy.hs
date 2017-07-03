@@ -11,6 +11,16 @@
 module Authy
   ( Authy (..)
   , HasAuthy (..)
+  -- * Authy TOTP API
+  , userNew
+  , sms
+  , call
+  , verify
+  , userDelete
+  , userRegisterActivity
+  , appDetails
+  , userStatus
+  , appStats
   -- * Authy phone verification API
   , PhoneVerificationVia (..)
   , PhoneVerificationRequest (..)
@@ -85,6 +95,133 @@ class HasAuthy r where
 instance HasAuthy Authy where
   getAuthy =
     id
+
+
+-- |
+--
+--
+
+userNew
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Object
+  -> m (Either ServantError Object)
+userNew a =
+  runWithKey $
+    userNew' a
+
+
+-- |
+--
+--
+
+sms
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Text
+  -> Maybe Text
+  -> Maybe Text
+  -> Maybe Bool
+  -> m (Either ServantError Object)
+sms a b c d =
+  runWithKey $
+    sms' a b c d
+
+
+-- |
+--
+--
+
+call
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Text
+  -> Maybe Text
+  -> Maybe Text
+  -> Maybe Bool
+  -> m (Either ServantError Object)
+call a b c d =
+  runWithKey $
+    call' a b c d
+
+
+-- |
+--
+--
+
+verify
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Text
+  -> Text
+  -> Maybe Text
+  -> m (Either ServantError Object)
+verify a b c =
+  runWithKey $
+    verify' a b c
+
+
+-- |
+--
+--
+
+userDelete
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Text
+  -> Maybe Text
+  -> m (Either ServantError Object)
+userDelete a b =
+  runWithKey $
+    userDelete' a b
+
+
+-- |
+--
+--
+
+userRegisterActivity
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Text
+  -> Object
+  -> m (Either ServantError Object)
+userRegisterActivity a b =
+  runWithKey $
+    userRegisterActivity' a b
+
+
+-- |
+--
+--
+
+appDetails
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Maybe Text
+  -> m (Either ServantError Object)
+appDetails a =
+  runWithKey $
+    appDetails' a
+
+
+-- |
+--
+--
+
+userStatus
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Text
+  -> Maybe Text
+  -> m (Either ServantError Object)
+userStatus a b =
+  runWithKey $
+    userStatus' a b
+
+
+-- |
+--
+--
+
+appStats
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => m (Either ServantError Object)
+appStats =
+  runWithKey
+    appStats'
 
 
 -- |
@@ -210,6 +347,85 @@ type AuthyAPIKey =
 type API =
     "protected"
       :> "json"
+      :> "users"
+      :> "new"
+      :> ReqBody '[JSON] Object
+      :> AuthyAPIKey
+      :> Post '[JSON] Object
+  :<|>
+    "protected"
+      :> "json"
+      :> "sms"
+      :> Capture "authy_id" Text
+      :> QueryParam "action" Text
+      :> QueryParam "action_message" Text
+      :> QueryParam "force" Bool
+      :> AuthyAPIKey
+      :> Get '[JSON] Object
+  :<|>
+    "protected"
+      :> "json"
+      :> "call"
+      :> Capture "authy_id" Text
+      :> QueryParam "action" Text
+      :> QueryParam "action_message" Text
+      :> QueryParam "force" Bool
+      :> AuthyAPIKey
+      :> Get '[JSON] Object
+  :<|>
+    "protected"
+      :> "json"
+      :> "verify"
+      :> Capture "token" Text
+      :> Capture "authy_id" Text
+      :> QueryParam "action" Text
+      :> AuthyAPIKey
+      :> Get '[JSON] Object
+  :<|>
+    "protected"
+      :> "json"
+      :> "users"
+      :> Capture "user_id" Text
+      :> "delete"
+      :> QueryParam "user_ip" Text -- or reqbody?
+      :> AuthyAPIKey
+      :> Post '[JSON] Object
+  :<|>
+    "protected"
+      :> "json"
+      :> "users"
+      :> Capture "user_id" Text
+      :> "register_activity"
+      :> ReqBody '[JSON] Object
+      :> AuthyAPIKey
+      :> Post '[JSON] Object
+  :<|>
+    "protected"
+      :> "json"
+      :> "app"
+      :> "details"
+      :> QueryParam "user_ip" Text
+      :> AuthyAPIKey
+      :> Get '[JSON] Object
+  :<|>
+    "protected"
+      :> "json"
+      :> "users"
+      :> Capture "user_id" Text
+      :> "status"
+      :> QueryParam "user_ip" Text
+      :> AuthyAPIKey
+      :> Get '[JSON] Object
+  :<|>
+    "protected"
+      :> "json"
+      :> "app"
+      :> "stats"
+      :> AuthyAPIKey
+      :> Get '[JSON] Object
+  :<|>
+    "protected"
+      :> "json"
       :> "phones"
       :> "verification"
       :> "start"
@@ -239,6 +455,70 @@ type API =
       :> Get '[JSON] PhoneInfo
 
 
+userNew'
+  :: Object
+  -> Maybe Text
+  -> ClientM Object
+
+
+sms'
+  :: Text
+  -> Maybe Text
+  -> Maybe Text
+  -> Maybe Bool
+  -> Maybe Text
+  -> ClientM Object
+
+
+call'
+  :: Text
+  -> Maybe Text
+  -> Maybe Text
+  -> Maybe Bool
+  -> Maybe Text
+  -> ClientM Object
+
+
+verify'
+  :: Text
+  -> Text
+  -> Maybe Text
+  -> Maybe Text
+  -> ClientM Object
+
+
+userDelete'
+  :: Text
+  -> Maybe Text -- Object?
+  -> Maybe Text
+  -> ClientM Object
+
+
+userRegisterActivity'
+  :: Text
+  -> Object
+  -> Maybe Text
+  -> ClientM Object
+
+
+appDetails'
+  :: Maybe Text
+  -> Maybe Text
+  -> ClientM Object
+
+
+userStatus'
+  :: Text
+  -> Maybe Text
+  -> Maybe Text
+  -> ClientM Object
+
+
+appStats'
+  :: Maybe Text
+  -> ClientM Object
+
+
 phoneInfo'
   :: Maybe Integer
   -> Maybe Text
@@ -261,7 +541,16 @@ phoneVerificationCheck'
   -> ClientM Text
 
 
-phoneVerificationStart'
+userNew'
+  :<|> sms'
+  :<|> call'
+  :<|> verify'
+  :<|> userDelete'
+  :<|> userRegisterActivity'
+  :<|> appDetails'
+  :<|> userStatus'
+  :<|> appStats'
+  :<|> phoneVerificationStart'
   :<|> phoneVerificationCheck'
   :<|> phoneInfo'
   =
