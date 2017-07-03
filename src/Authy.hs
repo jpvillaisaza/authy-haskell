@@ -21,6 +21,9 @@ module Authy
   , appDetails
   , userStatus
   , appStats
+  -- * Authy OneTouch API
+  , userApprovalRequest
+  , approvalRequest
   -- * Authy phone verification API
   , PhoneVerificationVia (..)
   , PhoneVerificationRequest (..)
@@ -228,6 +231,32 @@ appStats =
 --
 --
 
+userApprovalRequest
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Object
+  -> m (Either ServantError Object)
+userApprovalRequest o =
+  runWithKey $
+    userApprovalRequest' o
+
+
+-- |
+--
+--
+
+approvalRequest
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => UUID
+  -> m (Either ServantError Object)
+approvalRequest uuid =
+  runWithKey $
+    approvalRequest' uuid
+
+
+-- |
+--
+--
+
 phoneVerificationStart
   :: (HasAuthy r, MonadIO m, MonadReader r m)
   => PhoneVerificationRequest
@@ -424,6 +453,22 @@ type API =
       :> AuthyAPIKey
       :> Get '[JSON] Object
   :<|>
+    "onetouch"
+      :> "json"
+      :> "users"
+      :> "2"
+      :> "approval_requests"
+      :> ReqBody '[JSON] Object
+      :> AuthyAPIKey
+      :> Post '[JSON] Object
+  :<|>
+    "onetouch"
+      :> "json"
+      :> "approval_requests"
+      :> Capture "uuid" UUID
+      :> AuthyAPIKey
+      :> Get '[JSON] Object
+  :<|>
     "protected"
       :> "json"
       :> "phones"
@@ -519,6 +564,18 @@ appStats'
   -> ClientM Object
 
 
+userApprovalRequest'
+  :: Object
+  -> Maybe Text
+  -> ClientM Object
+
+
+approvalRequest'
+  :: UUID
+  -> Maybe Text
+  -> ClientM Object
+
+
 phoneInfo'
   :: Maybe Integer
   -> Maybe Text
@@ -550,6 +607,8 @@ userNew'
   :<|> appDetails'
   :<|> userStatus'
   :<|> appStats'
+  :<|> userApprovalRequest'
+  :<|> approvalRequest'
   :<|> phoneVerificationStart'
   :<|> phoneVerificationCheck'
   :<|> phoneInfo'
