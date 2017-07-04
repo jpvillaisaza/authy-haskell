@@ -12,14 +12,27 @@ module Authy
   ( Authy (..)
   , HasAuthy (..)
   -- * Authy TOTP API
+  , UserRequest (..)
+  , UserResponse (..)
   , userNew
+  , SmsResponse (..)
   , sms
   , call
+  , VerifyResponse (..)
+  , VerifyDevice (..)
   , verify
+  , MessageResponse (..)
   , userDelete
+  , UserActivity (..)
+  , UserActivityType (..)
   , userRegisterActivity
+  , AppDetails (..)
   , appDetails
+  , UserStatus (..)
+  , DetailedDevice (..)
   , userStatus
+  , AppStats (..)
+  , MonthAppStats (..)
   , appStats
   -- * Authy OneTouch API
   , userApprovalRequest
@@ -106,8 +119,8 @@ instance HasAuthy Authy where
 
 userNew
   :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => Object
-  -> m (Either ServantError Object)
+  => UserRequest
+  -> m (Either ServantError UserResponse)
 userNew a =
   runWithKey $
     userNew' a
@@ -119,11 +132,11 @@ userNew a =
 
 sms
   :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => Text
-  -> Maybe Text
-  -> Maybe Text
-  -> Maybe Bool
-  -> m (Either ServantError Object)
+  => Text -- ^ Authy ID
+  -> Maybe Text -- ^ Action
+  -> Maybe Text -- ^ Action message
+  -> Maybe Bool -- ^ Force
+  -> m (Either ServantError SmsResponse)
 sms a b c d =
   runWithKey $
     sms' a b c d
@@ -139,7 +152,7 @@ call
   -> Maybe Text
   -> Maybe Text
   -> Maybe Bool
-  -> m (Either ServantError Object)
+  -> m (Either ServantError SmsResponse)
 call a b c d =
   runWithKey $
     call' a b c d
@@ -154,10 +167,11 @@ verify
   => Text
   -> Text
   -> Maybe Text
-  -> m (Either ServantError Object)
-verify a b c =
+  -> Maybe Bool
+  -> m (Either ServantError VerifyResponse)
+verify a b c d =
   runWithKey $
-    verify' a b c
+    verify' a b c d
 
 
 -- |
@@ -168,7 +182,7 @@ userDelete
   :: (HasAuthy r, MonadIO m, MonadReader r m)
   => Text
   -> Maybe Text
-  -> m (Either ServantError Object)
+  -> m (Either ServantError MessageResponse)
 userDelete a b =
   runWithKey $
     userDelete' a b
@@ -181,8 +195,8 @@ userDelete a b =
 userRegisterActivity
   :: (HasAuthy r, MonadIO m, MonadReader r m)
   => Text
-  -> Object
-  -> m (Either ServantError Object)
+  -> UserActivity
+  -> m (Either ServantError MessageResponse)
 userRegisterActivity a b =
   runWithKey $
     userRegisterActivity' a b
@@ -195,7 +209,7 @@ userRegisterActivity a b =
 appDetails
   :: (HasAuthy r, MonadIO m, MonadReader r m)
   => Maybe Text
-  -> m (Either ServantError Object)
+  -> m (Either ServantError AppDetails)
 appDetails a =
   runWithKey $
     appDetails' a
@@ -209,7 +223,7 @@ userStatus
   :: (HasAuthy r, MonadIO m, MonadReader r m)
   => Text
   -> Maybe Text
-  -> m (Either ServantError Object)
+  -> m (Either ServantError UserStatus)
 userStatus a b =
   runWithKey $
     userStatus' a b
@@ -221,7 +235,7 @@ userStatus a b =
 
 appStats
   :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => m (Either ServantError Object)
+  => m (Either ServantError AppStats)
 appStats =
   runWithKey
     appStats'
@@ -378,9 +392,9 @@ type API =
       :> "json"
       :> "users"
       :> "new"
-      :> ReqBody '[JSON] Object
+      :> ReqBody '[JSON] UserRequest
       :> AuthyAPIKey
-      :> Post '[JSON] Object
+      :> Post '[JSON] UserResponse
   :<|>
     "protected"
       :> "json"
@@ -390,7 +404,7 @@ type API =
       :> QueryParam "action_message" Text
       :> QueryParam "force" Bool
       :> AuthyAPIKey
-      :> Get '[JSON] Object
+      :> Get '[JSON] SmsResponse
   :<|>
     "protected"
       :> "json"
@@ -400,7 +414,7 @@ type API =
       :> QueryParam "action_message" Text
       :> QueryParam "force" Bool
       :> AuthyAPIKey
-      :> Get '[JSON] Object
+      :> Get '[JSON] SmsResponse
   :<|>
     "protected"
       :> "json"
@@ -408,26 +422,27 @@ type API =
       :> Capture "token" Text
       :> Capture "authy_id" Text
       :> QueryParam "action" Text
+      :> QueryParam "force" Bool
       :> AuthyAPIKey
-      :> Get '[JSON] Object
+      :> Get '[JSON] VerifyResponse
   :<|>
     "protected"
       :> "json"
       :> "users"
       :> Capture "user_id" Text
       :> "delete"
-      :> QueryParam "user_ip" Text -- or reqbody?
+      :> QueryParam "user_ip" Text -- TODO or reqbody?
       :> AuthyAPIKey
-      :> Post '[JSON] Object
+      :> Post '[JSON] MessageResponse
   :<|>
     "protected"
       :> "json"
       :> "users"
       :> Capture "user_id" Text
       :> "register_activity"
-      :> ReqBody '[JSON] Object
+      :> ReqBody '[JSON] UserActivity
       :> AuthyAPIKey
-      :> Post '[JSON] Object
+      :> Post '[JSON] MessageResponse
   :<|>
     "protected"
       :> "json"
@@ -435,7 +450,7 @@ type API =
       :> "details"
       :> QueryParam "user_ip" Text
       :> AuthyAPIKey
-      :> Get '[JSON] Object
+      :> Get '[JSON] AppDetails
   :<|>
     "protected"
       :> "json"
@@ -444,14 +459,14 @@ type API =
       :> "status"
       :> QueryParam "user_ip" Text
       :> AuthyAPIKey
-      :> Get '[JSON] Object
+      :> Get '[JSON] UserStatus
   :<|>
     "protected"
       :> "json"
       :> "app"
       :> "stats"
       :> AuthyAPIKey
-      :> Get '[JSON] Object
+      :> Get '[JSON] AppStats
   :<|>
     "onetouch"
       :> "json"
@@ -501,9 +516,9 @@ type API =
 
 
 userNew'
-  :: Object
+  :: UserRequest
   -> Maybe Text
-  -> ClientM Object
+  -> ClientM UserResponse
 
 
 sms'
@@ -512,7 +527,7 @@ sms'
   -> Maybe Text
   -> Maybe Bool
   -> Maybe Text
-  -> ClientM Object
+  -> ClientM SmsResponse
 
 
 call'
@@ -521,47 +536,48 @@ call'
   -> Maybe Text
   -> Maybe Bool
   -> Maybe Text
-  -> ClientM Object
+  -> ClientM SmsResponse
 
 
 verify'
   :: Text
   -> Text
   -> Maybe Text
+  -> Maybe Bool
   -> Maybe Text
-  -> ClientM Object
+  -> ClientM VerifyResponse
 
 
 userDelete'
   :: Text
   -> Maybe Text -- Object?
   -> Maybe Text
-  -> ClientM Object
+  -> ClientM MessageResponse
 
 
 userRegisterActivity'
   :: Text
-  -> Object
+  -> UserActivity
   -> Maybe Text
-  -> ClientM Object
+  -> ClientM MessageResponse
 
 
 appDetails'
   :: Maybe Text
   -> Maybe Text
-  -> ClientM Object
+  -> ClientM AppDetails
 
 
 userStatus'
   :: Text
   -> Maybe Text
   -> Maybe Text
-  -> ClientM Object
+  -> ClientM UserStatus
 
 
 appStats'
   :: Maybe Text
-  -> ClientM Object
+  -> ClientM AppStats
 
 
 userApprovalRequest'
@@ -614,6 +630,426 @@ userNew'
   :<|> phoneInfo'
   =
   client (Proxy :: Proxy API)
+
+
+-- |
+--
+--
+
+data UserRequest =
+  UserRequest
+    { userRequestSendInstallLinkViaSms :: Maybe Bool
+    , userEmail :: Text
+    , userCellphone :: Text
+    , userCountryCode :: Text
+    }
+
+
+-- |
+--
+--
+
+instance ToJSON UserRequest where
+  toJSON UserRequest {..} =
+    object
+      [ "send_install_link_via_sms" .= userRequestSendInstallLinkViaSms
+      , "user" .= userObject
+      ]
+    where
+      userObject =
+        object
+          [ "email" .= userEmail
+          , "cellphone" .= userCellphone
+          , "country_code" .= userCountryCode
+          ]
+
+
+-- |
+--
+--
+
+data UserResponse =
+  UserResponse
+    { userId :: Integer
+    }
+  deriving (Eq, Show)
+
+
+-- |
+--
+--
+
+instance FromJSON UserResponse where
+  parseJSON =
+    withObject "" $
+      \o -> do
+        user <- o .: "user"
+        parseJSON' user
+    where
+      parseJSON' =
+        withObject "" $
+          \o ->
+            UserResponse
+              <$> o .: "id"
+
+
+-- |
+--
+--
+
+data SmsResponse =
+  SmsResponse
+    { smsResponseMessage :: Text
+    , smsResponseCellphone :: Text
+    , smsResponseIgnored :: Maybe Bool
+    , smsResponseDevice :: Maybe Text
+    }
+  deriving (Eq, Show)
+
+
+-- |
+--
+--
+
+instance FromJSON SmsResponse where
+  parseJSON =
+    withObject "" $
+      \o ->
+        SmsResponse
+          <$> o .: "message"
+          <*> o .: "cellphone"
+          <*> o .:? "ignored"
+          <*> o .:? "device"
+
+
+-- |
+--
+--
+
+data VerifyResponse =
+  VerifyResponse
+    { verifyResponseToken :: Text -- "is valid" or "is invalid"
+    , verifyResponseMessage :: Text -- "Token is valid"
+    , verifyResponseDevice :: Maybe VerifyDevice
+    }
+  deriving (Eq, Show)
+
+
+-- |
+--
+--
+
+instance FromJSON VerifyResponse where
+  parseJSON =
+    withObject "" $
+      \o ->
+        VerifyResponse
+          <$> o .: "token"
+          <*> o .: "message"
+          <*> o .: "device"
+
+
+-- |
+--
+--
+
+data VerifyDevice =
+  VerifyDevice
+    { verifyDeviceRegistrationDate :: Integer
+    , verifyDeviceCountry :: Text
+    , verifyDeviceRegistrationCountry :: Maybe Text
+    , verifyDeviceIP :: Text
+    , verifyDeviceRegistrationCity :: Maybe Text
+    , verifyDeviceRegistrationMethod :: Maybe Text
+    , verifyDeviceRegistrationIP :: Maybe Text
+    , verifyDeviceCity :: Maybe Text
+    , verifyDeviceLastAccountRecovery :: Maybe Integer
+    , verifyDeviceId :: Integer
+    , verifyDeviceRegion :: Maybe Text
+    , verifyDeviceOSType :: Text
+    , verifyDeviceRegistrationRegion :: Maybe Text
+    , verifyDeviceLastSyncDate :: Integer
+    }
+  deriving (Eq, Show)
+
+
+-- |
+--
+--
+
+instance FromJSON VerifyDevice where
+  parseJSON =
+    withObject "" $
+      \o ->
+        VerifyDevice
+          <$> o .: "registration_date"
+          <*> o .: "country"
+          <*> o .: "registration_country"
+          <*> o .: "ip"
+          <*> o .: "registration_city"
+          <*> o .: "registration_method"
+          <*> o .: "registration_ip"
+          <*> o .: "city"
+          <*> o .: "last_account_recovery_at"
+          <*> o .: "id"
+          <*> o .: "region"
+          <*> o .: "os_type"
+          <*> o .: "registration_region"
+          <*> o .: "last_sync_date"
+
+
+-- |
+--
+--
+
+newtype MessageResponse =
+  MessageResponse
+    { messageResponseMessage :: Text
+    }
+  deriving (Eq, Show)
+
+
+-- |
+--
+--
+
+instance FromJSON MessageResponse where
+  parseJSON =
+    withObject "" $
+      \o ->
+        MessageResponse
+          <$> o .: "message"
+
+
+-- |
+--
+--
+
+data UserActivity =
+  UserActivity
+    { userActivityData :: Maybe Text -- TODO Optional?
+    , userActivityType :: UserActivityType
+    , userActivityUserIP :: Maybe Text -- TODO Optional?
+    }
+
+
+-- |
+--
+--
+
+instance ToJSON UserActivity where
+  toJSON UserActivity {..} =
+    object
+      [ "data" .= userActivityData
+      , "type" .= userActivityType
+      , "userActivityUserIP" .= userActivityUserIP
+      ]
+
+
+-- |
+--
+--
+
+data UserActivityType
+  = PasswordReset
+  | Banned
+  | Unbanned
+  | CookieLogin
+
+
+-- |
+--
+--
+
+instance ToJSON UserActivityType where
+  toJSON userActivity =
+    case userActivity of
+      PasswordReset ->
+        "password_reset"
+
+      Banned ->
+        "banned"
+
+      Unbanned ->
+        "unbanned"
+
+      CookieLogin ->
+        "cookie_login"
+
+
+-- |
+--
+--
+
+data AppDetails =
+  AppDetails
+    { appID :: Integer
+    , appName :: Text
+    , appOneTouchEnabled :: Bool
+    , appPlan :: Text
+    , appPhoneCallsEnabled :: Bool
+    , appSMSEnabled :: Bool
+    }
+  deriving (Eq, Show)
+
+
+-- |
+--
+--
+
+instance FromJSON AppDetails where
+  parseJSON =
+    withObject "" $
+      \o -> do
+        app <- o .: "app"
+        parseJSON' app
+    where
+      parseJSON' =
+        withObject "" $
+          \o ->
+            AppDetails
+              <$> o .: "app_id"
+              <*> o .: "name"
+              <*> o .: "onetouch_enabled"
+              <*> o .: "plan"
+              <*> o .: "phone_calls_enabled"
+              <*> o .: "sms_enabled"
+
+
+-- |
+--
+--
+
+data UserStatus =
+  UserStatus
+    { userStatusCountryCode :: Integer
+    , userPhoneNumber :: Text
+    , userAuthyID :: Integer
+    , userHasHardToken :: Bool
+    , userDetailedDevices :: [DetailedDevice]
+    , userRegistered :: Bool
+    , userDevices :: [Text]
+    , userConfirmed :: Bool
+    , userAccountDisabled :: Bool
+    }
+  deriving (Eq, Show)
+
+
+-- |
+--
+--
+
+instance FromJSON UserStatus where
+  parseJSON =
+    withObject "" $
+      \o -> do
+        status <- o .: "status"
+        parseJSON' status
+    where
+      parseJSON' =
+        withObject "" $
+          \o ->
+            UserStatus
+              <$> o .: "country_code"
+              <*> o .: "phone_number"
+              <*> o .: "authy_id"
+              <*> o .: "has_hard_token"
+              <*> o .: "detailed_devices"
+              <*> o .: "registered"
+              <*> o .: "devices"
+              <*> o .: "confirmed"
+              <*> o .: "account_disabled"
+
+
+-- |
+--
+--
+
+data DetailedDevice =
+  DetailedDevice
+    { deviceType :: Text
+    , deviceCreationDate :: Integer
+    , deviceOSType :: Text
+    }
+  deriving (Eq, Show)
+
+
+-- |
+--
+--
+
+instance FromJSON DetailedDevice where
+  parseJSON =
+    withObject "" $
+      \o ->
+        DetailedDevice
+          <$> o .: "device_type"
+          <*> o .: "creation_date"
+          <*> o .: "os_type"
+
+
+-- |
+--
+--
+
+data AppStats =
+  AppStats
+    { appStatsCount :: Integer
+    , appStatsStats :: [MonthAppStats]
+    , appStatsTotalUsers :: Integer
+    , appStatsAppId :: Integer
+    }
+  deriving (Eq, Show)
+
+
+-- |
+--
+--
+
+instance FromJSON AppStats where
+  parseJSON =
+    withObject "" $
+      \o ->
+        AppStats
+          <$> o .: "count"
+          <*> o .: "stats"
+          <*> o .: "total_users"
+          <*> o .: "app_id"
+
+
+-- |
+--
+--
+
+data MonthAppStats =
+  MonthAppStats
+    { monthAppStatsYear :: Integer
+    , monthAppStatsMonth :: Text
+    , monthAppStatsAPICallsCount :: Integer
+    , monthAppStatsAuthsCount :: Integer
+    , monthAppStatsCallsCount :: Integer
+    , monthAppStatsUsersCount :: Integer
+    , monthAppStatsSmsCount :: Integer
+    }
+  deriving (Eq, Show)
+
+
+-- |
+--
+--
+
+instance FromJSON MonthAppStats where
+  parseJSON =
+    withObject "" $
+      \o ->
+        MonthAppStats
+          <$> o .: "year"
+          <*> o .: "month"
+          <*> o .: "api_calls_count"
+          <*> o .: "auths_count"
+          <*> o .: "calls_count"
+          <*> o .: "users_count"
+          <*> o .: "sms_count"
 
 
 -- |
