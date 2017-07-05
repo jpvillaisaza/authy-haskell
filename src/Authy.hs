@@ -40,6 +40,7 @@ module Authy
   , userApprovalRequest
   , ApprovalReq (..)
   , approvalRequest
+  , verifyCallback
   -- * Authy phone verification API
   , PhoneVerificationVia (..)
   , PhoneVerificationRequest (..)
@@ -65,6 +66,16 @@ import Data.Aeson
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Proxy (Proxy (..))
 
+-- base64-bytestring
+import qualified Data.ByteString.Base64 as B64
+
+-- bytestring
+import qualified Data.ByteString.Char8 as ByteString
+
+-- cryptonite
+import Crypto.Hash
+import Crypto.MAC.HMAC
+
 -- http-client
 import Network.HTTP.Client (Manager)
 
@@ -79,7 +90,8 @@ import Servant.Client
 
 -- text
 import Data.Text (Text)
-import qualified Data.Text as Text (stripPrefix, unpack)
+import qualified Data.Text as Text (intercalate, stripPrefix, unpack)
+import Data.Text.Encoding
 
 -- time
 import Data.Time (UTCTime, defaultTimeLocale, parseTimeM)
@@ -1404,3 +1416,30 @@ instance FromJSON PhoneType where
           "unknown" -> return Unknown
           "voip" -> return VoIP
           _ -> fail ""
+
+
+-- |
+--
+--
+
+verifyCallback
+  :: Text -- ^ Key
+  -> Text -- ^ Nonce
+  -> Text -- ^ HTTP method (GET or POST)
+  -> Text -- ^ Params
+  -> Text -- ^ url
+  -> Text -- ^ X-Authy-Signature
+  -> Bool
+verifyCallback key nonce httpMethod url sortedParams sig =
+  let
+    data_ =
+      Text.intercalate "|" [nonce, httpMethod, url, sortedParams]
+
+    digest :: HMAC SHA256
+    digest = hmac (encodeUtf8 key) (encodeUtf8 data_)
+
+    digest64 =
+      B64.encode (ByteString.pack (show (hmacGetDigest digest)))
+
+  in
+    digest64 == encodeUtf8 sig
