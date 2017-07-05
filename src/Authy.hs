@@ -35,7 +35,10 @@ module Authy
   , MonthAppStats (..)
   , appStats
   -- * Authy OneTouch API
+  , UserApprovalRequest (..)
+  , ApprovalRequest (..)
   , userApprovalRequest
+  , ApprovalReq (..)
   , approvalRequest
   -- * Authy phone verification API
   , PhoneVerificationVia (..)
@@ -247,11 +250,12 @@ appStats =
 
 userApprovalRequest
   :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => Object
-  -> m (Either ServantError Object)
-userApprovalRequest o =
+  => Text
+  -> UserApprovalRequest
+  -> m (Either ServantError ApprovalRequest)
+userApprovalRequest a o =
   runWithKey $
-    userApprovalRequest' o
+    userApprovalRequest' a o
 
 
 -- |
@@ -261,7 +265,7 @@ userApprovalRequest o =
 approvalRequest
   :: (HasAuthy r, MonadIO m, MonadReader r m)
   => UUID
-  -> m (Either ServantError Object)
+  -> m (Either ServantError ApprovalReq)
 approvalRequest uuid =
   runWithKey $
     approvalRequest' uuid
@@ -471,18 +475,18 @@ type API =
     "onetouch"
       :> "json"
       :> "users"
-      :> "2"
+      :> Capture "authy_id" Text
       :> "approval_requests"
-      :> ReqBody '[JSON] Object
+      :> ReqBody '[JSON] UserApprovalRequest
       :> AuthyAPIKey
-      :> Post '[JSON] Object
+      :> Post '[JSON] ApprovalRequest
   :<|>
     "onetouch"
       :> "json"
       :> "approval_requests"
       :> Capture "uuid" UUID
       :> AuthyAPIKey
-      :> Get '[JSON] Object
+      :> Get '[JSON] ApprovalReq
   :<|>
     "protected"
       :> "json"
@@ -581,15 +585,16 @@ appStats'
 
 
 userApprovalRequest'
-  :: Object
+  :: Text
+  -> UserApprovalRequest
   -> Maybe Text
-  -> ClientM Object
+  -> ClientM ApprovalRequest
 
 
 approvalRequest'
   :: UUID
   -> Maybe Text
-  -> ClientM Object
+  -> ClientM ApprovalReq
 
 
 phoneInfo'
@@ -1050,6 +1055,166 @@ instance FromJSON MonthAppStats where
           <*> o .: "calls_count"
           <*> o .: "users_count"
           <*> o .: "sms_count"
+
+
+-- |
+--
+--
+
+data UserApprovalRequest =
+  UserApprovalRequest
+    { userApprovalRequestMessage :: Text
+    , userApprovalRequestDetails :: [(Text, Text)]
+    , userApprovalRequestHiddenDetails :: [(Text, Text)]
+    , userApprovalRequestLogos :: [Logo]
+    , userApprovalRequestSecondsToExpire :: Maybe Integer
+      -- 0 means don't expire, default is 86400 (1 day)
+    }
+
+
+-- |
+--
+--
+
+instance ToJSON UserApprovalRequest where
+  toJSON UserApprovalRequest {..} =
+    object
+      [ "message" .= userApprovalRequestMessage
+      , "details" .= toObject userApprovalRequestDetails
+      , "hidden_details" .= toObject userApprovalRequestHiddenDetails
+      , "logos" .= userApprovalRequestLogos
+      , "seconds_to_expire" .= userApprovalRequestSecondsToExpire
+      ]
+    where
+      toObject =
+        object . fmap (fmap String)
+
+
+-- |
+--
+--
+
+data Logo =
+  Logo
+    { logoResolution :: Resolution
+    , logoUrl :: Text
+    }
+
+
+-- |
+--
+--
+
+instance ToJSON Logo where
+  toJSON Logo {..} =
+    object
+      [ "res" .= logoResolution
+      , "url" .= logoUrl
+      ]
+
+
+-- |
+--
+--
+
+data Resolution
+  = Default
+  | Low
+  | Medium
+  | High
+
+
+-- |
+--
+--
+
+instance ToJSON Resolution where
+  toJSON Default = "default"
+  toJSON Low = "low"
+  toJSON Medium = "med"
+  toJSON High = "high"
+
+
+-- |
+--
+--
+
+newtype ApprovalRequest =
+  ApprovalRequest UUID
+  deriving (Eq, Show)
+
+
+-- |
+--
+--
+
+instance FromJSON ApprovalRequest where
+  parseJSON =
+    withObject "" $
+      \o -> do
+        req <- o .: "approval_request"
+        parseJSON' req
+    where
+      parseJSON' =
+        withObject "" $
+          \o ->
+            ApprovalRequest
+              <$> o .: "uuid"
+
+
+-- |
+--
+--
+
+data ApprovalReq =
+  ApprovalReq
+    { approvalReqStatus :: Text
+    , approvalReqNotified :: Bool
+    , approvalReq_id :: Text
+    , approvalReqUUID :: UUID
+    , approvalReqProcessedAt :: UTCTime
+    , approvalReqAppSerialId :: Integer
+    , approvalReqAuthyId :: Integer
+    , approvalReqUpdatedAt :: UTCTime
+    , approvalReqCreatedAt :: UTCTime
+    , approvalReqUserEmail :: Text
+    , approvalReqSecondsToExpire :: Integer
+    , approvalReqAppID :: Text
+    , approvalReqID :: Text
+    , approvalReqAppName :: Text
+    }
+  deriving (Eq, Show)
+
+
+-- |
+--
+--
+
+instance FromJSON ApprovalReq where
+  parseJSON =
+    withObject "" $
+      \o -> do
+        ar <- o .: "approval_request"
+        parseJSON' ar
+    where
+      parseJSON' =
+        withObject "" $
+          \o ->
+            ApprovalReq
+              <$> o .: "status"
+              <*> o .: "notified"
+              <*> o .: "_id"
+              <*> o .: "uuid"
+              <*> o .: "processed_at"
+              <*> o .: "_app_serial_id"
+              <*> o .: "_authy_id"
+              <*> o .: "updated_at"
+              <*> o .: "created_at"
+              <*> o .: "_user_email"
+              <*> o .: "seconds_to_expire"
+              <*> o .: "app_id"
+              <*> o .: "user_id"
+              <*> o .: "_app_name"
 
 
 -- |
