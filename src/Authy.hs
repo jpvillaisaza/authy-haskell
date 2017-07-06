@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeOperators #-}
@@ -126,6 +127,15 @@ class HasAuthy r where
 instance HasAuthy Authy where
   getAuthy =
     id
+
+
+-- |
+--
+--
+
+instance HasAuthy (Text, Manager) where
+  getAuthy =
+    uncurry Authy
 
 
 -- |
