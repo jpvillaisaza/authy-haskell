@@ -11,6 +11,7 @@
 
 module Authy
   ( Authy (..)
+  , getAuthy'
   , HasAuthy (..)
   -- * Authy TOTP API
   , UserRequest (..)
@@ -66,6 +67,7 @@ import Data.Aeson
 -- base
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Proxy (Proxy (..))
+import System.Environment
 
 -- base64-bytestring
 import qualified Data.ByteString.Base64 as B64
@@ -80,6 +82,9 @@ import Crypto.MAC.HMAC
 -- http-client
 import Network.HTTP.Client (Manager)
 
+-- http-client-tls
+import Network.HTTP.Client.TLS
+
 -- mtl
 import Control.Monad.Reader (MonadReader, asks)
 
@@ -91,7 +96,7 @@ import Servant.Client
 
 -- text
 import Data.Text (Text)
-import qualified Data.Text as Text (intercalate, stripPrefix, unpack)
+import qualified Data.Text as Text
 import Data.Text.Encoding
 
 -- time
@@ -136,6 +141,27 @@ instance HasAuthy Authy where
 instance HasAuthy (Text, Manager) where
   getAuthy =
     uncurry Authy
+
+
+-- |
+--
+--
+
+getAuthy' :: IO (Either Text Authy)
+getAuthy' = do
+  manager <- getGlobalManager
+  maybeKey <- lookupEnv "AUTHY_API_KEY"
+  return $
+    case maybeKey of
+      Nothing ->
+        Left ""
+
+      Just key ->
+        Right
+          Authy
+            { authyKey = Text.pack key
+            , authyManager = manager
+            }
 
 
 -- |
