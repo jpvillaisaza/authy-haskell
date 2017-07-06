@@ -132,6 +132,22 @@ instance HasAuthy Authy where
 --
 --
 
+type UserNew' =
+  "protected"
+    :> "json"
+    :> "users"
+    :> "new"
+    :> ReqBody '[JSON] UserRequest
+    :> AuthyAPIKey
+    :> Post '[JSON] UserResponse
+
+
+userNew'
+  :: UserRequest
+  -> Maybe Text
+  -> ClientM UserResponse
+
+
 userNew
   :: (HasAuthy r, MonadIO m, MonadReader r m)
   => UserRequest
@@ -144,6 +160,27 @@ userNew a =
 -- |
 --
 --
+
+type Sms' =
+  "protected"
+    :> "json"
+    :> "sms"
+    :> Capture "authy_id" Text
+    :> QueryParam "action" Text
+    :> QueryParam "action_message" Text
+    :> QueryParam "force" Bool
+    :> AuthyAPIKey
+    :> Get '[JSON] SmsResponse
+
+
+sms'
+  :: Text
+  -> Maybe Text
+  -> Maybe Text
+  -> Maybe Bool
+  -> Maybe Text
+  -> ClientM SmsResponse
+
 
 sms
   :: (HasAuthy r, MonadIO m, MonadReader r m)
@@ -161,6 +198,27 @@ sms a b c d =
 --
 --
 
+type Call' =
+  "protected"
+    :> "json"
+    :> "call"
+    :> Capture "authy_id" Text
+    :> QueryParam "action" Text
+    :> QueryParam "action_message" Text
+    :> QueryParam "force" Bool
+    :> AuthyAPIKey
+    :> Get '[JSON] SmsResponse
+
+
+call'
+  :: Text
+  -> Maybe Text
+  -> Maybe Text
+  -> Maybe Bool
+  -> Maybe Text
+  -> ClientM SmsResponse
+
+
 call
   :: (HasAuthy r, MonadIO m, MonadReader r m)
   => Text
@@ -176,6 +234,27 @@ call a b c d =
 -- |
 --
 --
+
+type Verify' =
+  "protected"
+    :> "json"
+    :> "verify"
+    :> Capture "token" Text
+    :> Capture "authy_id" Text
+    :> QueryParam "action" Text
+    :> QueryParam "force" Bool
+    :> AuthyAPIKey
+    :> Get '[JSON] VerifyResponse
+
+
+verify'
+  :: Text
+  -> Text
+  -> Maybe Text
+  -> Maybe Bool
+  -> Maybe Text
+  -> ClientM VerifyResponse
+
 
 verify
   :: (HasAuthy r, MonadIO m, MonadReader r m)
@@ -193,6 +272,24 @@ verify a b c d =
 --
 --
 
+type UserDelete' =
+  "protected"
+    :> "json"
+    :> "users"
+    :> Capture "user_id" Text
+    :> "delete"
+    :> QueryParam "user_ip" Text -- TODO or reqbody?
+    :> AuthyAPIKey
+    :> Post '[JSON] MessageResponse
+
+
+userDelete'
+  :: Text
+  -> Maybe Text -- Object?
+  -> Maybe Text
+  -> ClientM MessageResponse
+
+
 userDelete
   :: (HasAuthy r, MonadIO m, MonadReader r m)
   => Text
@@ -206,6 +303,24 @@ userDelete a b =
 -- |
 --
 --
+
+type UserRegisterActivity' =
+  "protected"
+    :> "json"
+    :> "users"
+    :> Capture "user_id" Text
+    :> "register_activity"
+    :> ReqBody '[JSON] UserActivity
+    :> AuthyAPIKey
+    :> Post '[JSON] MessageResponse
+
+
+userRegisterActivity'
+  :: Text
+  -> UserActivity
+  -> Maybe Text
+  -> ClientM MessageResponse
+
 
 userRegisterActivity
   :: (HasAuthy r, MonadIO m, MonadReader r m)
@@ -221,6 +336,22 @@ userRegisterActivity a b =
 --
 --
 
+type AppDetails' =
+  "protected"
+    :> "json"
+    :> "app"
+    :> "details"
+    :> QueryParam "user_ip" Text
+    :> AuthyAPIKey
+    :> Get '[JSON] AppDetails
+
+
+appDetails'
+  :: Maybe Text
+  -> Maybe Text
+  -> ClientM AppDetails
+
+
 appDetails
   :: (HasAuthy r, MonadIO m, MonadReader r m)
   => Maybe Text
@@ -233,6 +364,24 @@ appDetails a =
 -- |
 --
 --
+
+type UserStatus' =
+  "protected"
+    :> "json"
+    :> "users"
+    :> Capture "user_id" Text
+    :> "status"
+    :> QueryParam "user_ip" Text
+    :> AuthyAPIKey
+    :> Get '[JSON] UserStatus
+
+
+userStatus'
+  :: Text
+  -> Maybe Text
+  -> Maybe Text
+  -> ClientM UserStatus
+
 
 userStatus
   :: (HasAuthy r, MonadIO m, MonadReader r m)
@@ -248,6 +397,20 @@ userStatus a b =
 --
 --
 
+type AppStats' =
+  "protected"
+    :> "json"
+    :> "app"
+    :> "stats"
+    :> AuthyAPIKey
+    :> Get '[JSON] AppStats
+
+
+appStats'
+  :: Maybe Text
+  -> ClientM AppStats
+
+
 appStats
   :: (HasAuthy r, MonadIO m, MonadReader r m)
   => m (Either ServantError AppStats)
@@ -259,6 +422,24 @@ appStats =
 -- |
 --
 --
+
+type UserApprovalRequest' =
+  "onetouch"
+    :> "json"
+    :> "users"
+    :> Capture "authy_id" Text
+    :> "approval_requests"
+    :> ReqBody '[JSON] UserApprovalRequest
+    :> AuthyAPIKey
+    :> Post '[JSON] ApprovalRequest
+
+
+userApprovalRequest'
+  :: Text
+  -> UserApprovalRequest
+  -> Maybe Text
+  -> ClientM ApprovalRequest
+
 
 userApprovalRequest
   :: (HasAuthy r, MonadIO m, MonadReader r m)
@@ -274,6 +455,21 @@ userApprovalRequest a o =
 --
 --
 
+type ApprovalRequest' =
+  "onetouch"
+    :> "json"
+    :> "approval_requests"
+    :> Capture "uuid" UUID
+    :> AuthyAPIKey
+    :> Get '[JSON] ApprovalReq
+
+
+approvalRequest'
+  :: UUID
+  -> Maybe Text
+  -> ClientM ApprovalReq
+
+
 approvalRequest
   :: (HasAuthy r, MonadIO m, MonadReader r m)
   => UUID
@@ -286,6 +482,23 @@ approvalRequest uuid =
 -- |
 --
 --
+
+type PhoneVerificationStart' =
+  "protected"
+    :> "json"
+    :> "phones"
+    :> "verification"
+    :> "start"
+    :> ReqBody '[JSON] PhoneVerificationRequest
+    :> AuthyAPIKey
+    :> Post '[JSON] PhoneVerificationResponse
+
+
+phoneVerificationStart'
+  :: PhoneVerificationRequest
+  -> Maybe Text
+  -> ClientM PhoneVerificationResponse
+
 
 phoneVerificationStart
   :: (HasAuthy r, MonadIO m, MonadReader r m)
@@ -328,6 +541,27 @@ phoneVerificationStartSMS countryCode phoneNumber =
 --
 --
 
+type PhoneVerificationCheck' =
+  "protected"
+    :> "json"
+    :> "phones"
+    :> "verification"
+    :> "check"
+    :> QueryParam "country_code" Integer
+    :> QueryParam "phone_number" Text
+    :> QueryParam "verification_code" Text
+    :> AuthyAPIKey
+    :> Get '[JSON] Text
+
+
+phoneVerificationCheck'
+  :: Maybe Integer
+  -> Maybe Text
+  -> Maybe Text
+  -> Maybe Text
+  -> ClientM Text
+
+
 phoneVerificationCheck
   :: (HasAuthy r, MonadIO m, MonadReader r m)
   => Integer -- ^ Country code
@@ -345,6 +579,26 @@ phoneVerificationCheck countryCode phoneNumber verificationCode =
 -- |
 --
 --
+
+type PhoneInfo' =
+  "protected"
+    :> "json"
+    :> "phones"
+    :> "info"
+    :> QueryParam "country_code" Integer -- required
+    :> QueryParam "phone_number" Text -- required
+    :> QueryParam "user_ip" Text -- optional
+    :> Header "X-Authy-API-Key" Text -- required
+    :> Get '[JSON] PhoneInfo
+
+
+phoneInfo'
+  :: Maybe Integer
+  -> Maybe Text
+  -> Maybe Text
+  -> Maybe Text
+  -> ClientM PhoneInfo
+
 
 phoneInfo
   :: (HasAuthy r, MonadIO m, MonadReader r m)
@@ -404,231 +658,33 @@ type AuthyAPIKey =
 --
 
 type API =
-    "protected"
-      :> "json"
-      :> "users"
-      :> "new"
-      :> ReqBody '[JSON] UserRequest
-      :> AuthyAPIKey
-      :> Post '[JSON] UserResponse
+    UserNew'
   :<|>
-    "protected"
-      :> "json"
-      :> "sms"
-      :> Capture "authy_id" Text
-      :> QueryParam "action" Text
-      :> QueryParam "action_message" Text
-      :> QueryParam "force" Bool
-      :> AuthyAPIKey
-      :> Get '[JSON] SmsResponse
+    Sms'
   :<|>
-    "protected"
-      :> "json"
-      :> "call"
-      :> Capture "authy_id" Text
-      :> QueryParam "action" Text
-      :> QueryParam "action_message" Text
-      :> QueryParam "force" Bool
-      :> AuthyAPIKey
-      :> Get '[JSON] SmsResponse
+    Call'
   :<|>
-    "protected"
-      :> "json"
-      :> "verify"
-      :> Capture "token" Text
-      :> Capture "authy_id" Text
-      :> QueryParam "action" Text
-      :> QueryParam "force" Bool
-      :> AuthyAPIKey
-      :> Get '[JSON] VerifyResponse
+    Verify'
   :<|>
-    "protected"
-      :> "json"
-      :> "users"
-      :> Capture "user_id" Text
-      :> "delete"
-      :> QueryParam "user_ip" Text -- TODO or reqbody?
-      :> AuthyAPIKey
-      :> Post '[JSON] MessageResponse
+    UserDelete'
   :<|>
-    "protected"
-      :> "json"
-      :> "users"
-      :> Capture "user_id" Text
-      :> "register_activity"
-      :> ReqBody '[JSON] UserActivity
-      :> AuthyAPIKey
-      :> Post '[JSON] MessageResponse
+    UserRegisterActivity'
   :<|>
-    "protected"
-      :> "json"
-      :> "app"
-      :> "details"
-      :> QueryParam "user_ip" Text
-      :> AuthyAPIKey
-      :> Get '[JSON] AppDetails
+    AppDetails'
   :<|>
-    "protected"
-      :> "json"
-      :> "users"
-      :> Capture "user_id" Text
-      :> "status"
-      :> QueryParam "user_ip" Text
-      :> AuthyAPIKey
-      :> Get '[JSON] UserStatus
+    UserStatus'
   :<|>
-    "protected"
-      :> "json"
-      :> "app"
-      :> "stats"
-      :> AuthyAPIKey
-      :> Get '[JSON] AppStats
+    AppStats'
   :<|>
-    "onetouch"
-      :> "json"
-      :> "users"
-      :> Capture "authy_id" Text
-      :> "approval_requests"
-      :> ReqBody '[JSON] UserApprovalRequest
-      :> AuthyAPIKey
-      :> Post '[JSON] ApprovalRequest
+    UserApprovalRequest'
   :<|>
-    "onetouch"
-      :> "json"
-      :> "approval_requests"
-      :> Capture "uuid" UUID
-      :> AuthyAPIKey
-      :> Get '[JSON] ApprovalReq
+    ApprovalRequest'
   :<|>
-    "protected"
-      :> "json"
-      :> "phones"
-      :> "verification"
-      :> "start"
-      :> ReqBody '[JSON] PhoneVerificationRequest
-      :> AuthyAPIKey
-      :> Post '[JSON] PhoneVerificationResponse
+    PhoneVerificationStart'
   :<|>
-    "protected"
-      :> "json"
-      :> "phones"
-      :> "verification"
-      :> "check"
-      :> QueryParam "country_code" Integer
-      :> QueryParam "phone_number" Text
-      :> QueryParam "verification_code" Text
-      :> AuthyAPIKey
-      :> Get '[JSON] Text
+    PhoneVerificationCheck'
   :<|>
-    "protected"
-      :> "json"
-      :> "phones"
-      :> "info"
-      :> QueryParam "country_code" Integer -- required
-      :> QueryParam "phone_number" Text -- required
-      :> QueryParam "user_ip" Text -- optional
-      :> Header "X-Authy-API-Key" Text -- required
-      :> Get '[JSON] PhoneInfo
-
-
-userNew'
-  :: UserRequest
-  -> Maybe Text
-  -> ClientM UserResponse
-
-
-sms'
-  :: Text
-  -> Maybe Text
-  -> Maybe Text
-  -> Maybe Bool
-  -> Maybe Text
-  -> ClientM SmsResponse
-
-
-call'
-  :: Text
-  -> Maybe Text
-  -> Maybe Text
-  -> Maybe Bool
-  -> Maybe Text
-  -> ClientM SmsResponse
-
-
-verify'
-  :: Text
-  -> Text
-  -> Maybe Text
-  -> Maybe Bool
-  -> Maybe Text
-  -> ClientM VerifyResponse
-
-
-userDelete'
-  :: Text
-  -> Maybe Text -- Object?
-  -> Maybe Text
-  -> ClientM MessageResponse
-
-
-userRegisterActivity'
-  :: Text
-  -> UserActivity
-  -> Maybe Text
-  -> ClientM MessageResponse
-
-
-appDetails'
-  :: Maybe Text
-  -> Maybe Text
-  -> ClientM AppDetails
-
-
-userStatus'
-  :: Text
-  -> Maybe Text
-  -> Maybe Text
-  -> ClientM UserStatus
-
-
-appStats'
-  :: Maybe Text
-  -> ClientM AppStats
-
-
-userApprovalRequest'
-  :: Text
-  -> UserApprovalRequest
-  -> Maybe Text
-  -> ClientM ApprovalRequest
-
-
-approvalRequest'
-  :: UUID
-  -> Maybe Text
-  -> ClientM ApprovalReq
-
-
-phoneInfo'
-  :: Maybe Integer
-  -> Maybe Text
-  -> Maybe Text
-  -> Maybe Text
-  -> ClientM PhoneInfo
-
-
-phoneVerificationStart'
-  :: PhoneVerificationRequest
-  -> Maybe Text
-  -> ClientM PhoneVerificationResponse
-
-
-phoneVerificationCheck'
-  :: Maybe Integer
-  -> Maybe Text
-  -> Maybe Text
-  -> Maybe Text
-  -> ClientM Text
+    PhoneInfo'
 
 
 userNew'
