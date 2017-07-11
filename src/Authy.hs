@@ -1,63 +1,93 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeOperators #-}
 
+----------------------------------------------------------------------
 -- |
 -- Module: Authy
 --
+-- Bindings for the Authy API:
 --
+-- * <https://www.twilio.com/docs/api/authy/authy>
+----------------------------------------------------------------------
 
 module Authy
-  ( Authy (..)
+  ( -- * Authy
+    -- $authy
+
+    Authy (..)
   , getAuthy'
   , HasAuthy (..)
-  -- * Authy TOTP API
-  , UserRequest (..)
-  , UserResponse (..)
-  , userNew
-  , SmsResponse (..)
-  , sms
-  , call
+
+  , AuthyID (..)
+  , Message (..)
+  , Token (..)
+
+    -- * Authy TOTP API
+    -- $totp
+
+    -- ** Users
+  , createUser
+  , deleteUser
+    -- ** Request a code via SMS
+  , RequestTokenResponse (..)
+  , requestTokenViaSMS
+  , requestTokenViaPhoneCall
+    -- ** Verify a code (token)
   , VerifyResponse (..)
   , VerifyDevice (..)
-  , verify
-  , MessageResponse (..)
-  , userDelete
+  , verifyToken
+    -- ** Register user activities
   , UserActivity (..)
   , UserActivityType (..)
-  , userRegisterActivity
-  , AppDetails (..)
-  , appDetails
+  , registerUserActivity
+    -- ** Get user status
   , UserStatus (..)
   , DetailedDevice (..)
-  , userStatus
+  , getUserStatus
+    -- ** Get application stats
+  , AppDetails (..)
+  , getApplicationDetails
   , AppStats (..)
   , MonthAppStats (..)
-  , appStats
-  -- * Authy OneTouch API
+  , getApplicationStats
+
+    -- * Authy OneTouch API
+    -- $onetouch
+
+    -- ** Create an approval request
   , UserApprovalRequest (..)
   , ApprovalRequest (..)
-  , userApprovalRequest
+  , createApprovalRequest
+    -- ** Check status of approval request
   , ApprovalReq (..)
-  , approvalRequest
+  , checkApprovalRequest
+    -- ** Verify callback authenticity
   , verifyCallback
-  -- * Authy phone verification API
+
+    -- * Authy phone verification API
+    -- $phone-verification
+
   , PhoneVerificationVia (..)
   , PhoneVerificationRequest (..)
   , mkPhoneVerificationRequest
   , mkPhoneVerificationRequestCall
   , mkPhoneVerificationRequestSMS
   , PhoneVerificationResponse (..)
-  , phoneVerificationStart
-  , phoneVerificationStartCall
-  , phoneVerificationStartSMS
-  , phoneVerificationCheck
-  -- * Authy phone intelligence API
+  , requestPhoneVerificationCode
+  , requestPhoneVerificationCodeViaSMS
+  , requestPhoneVerificationCodeViaPhoneCall
+  , verifyPhoneVerificationCode
+
+    -- * Authy phone intelligence API
+    -- $phone-intelligence
+
   , PhoneInfo (..)
   , PhoneType (..)
-  , phoneInfo
+  , getPhoneInformation
   )
   where
 
@@ -67,6 +97,7 @@ import Data.Aeson
 -- base
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Proxy (Proxy (..))
+import Data.String (IsString)
 import System.Environment
 
 -- base64-bytestring
@@ -104,6 +135,15 @@ import Data.Time (UTCTime, defaultTimeLocale, parseTimeM)
 
 -- uuid-types
 import Data.UUID.Types (UUID)
+
+
+----------------------------------------------------------------------
+-- * Authy
+----------------------------------------------------------------------
+
+-- $authy
+--
+--
 
 
 -- |
@@ -168,6 +208,76 @@ getAuthy' = do
 --
 --
 
+newtype AuthyID =
+  AuthyID
+    { unAuthyID :: Integer
+    }
+  deriving (Eq, Num, Ord, Show)
+
+
+-- |
+--
+--
+
+instance ToHttpApiData AuthyID where
+  toUrlPiece =
+    Text.pack . show
+
+
+-- |
+--
+--
+
+newtype Message =
+  Message
+    { unMessage :: Text
+    }
+  deriving (Eq, Show)
+
+
+-- |
+--
+--
+
+instance FromJSON Message where
+  parseJSON =
+    withObject "" $
+      \o ->
+        Message
+          <$> o .: "message"
+
+
+-- |
+--
+--
+
+newtype Token =
+  Token
+    { unToken :: Text
+    }
+  deriving (Eq, IsString, Show)
+
+
+-- |
+--
+--
+
+instance ToHttpApiData Token where
+  toUrlPiece =
+    unToken
+
+
+----------------------------------------------------------------------
+-- * Authy TOTP API
+----------------------------------------------------------------------
+
+-- $totp
+--
+-- Bindings for the Authy TOTP (time-based one-time password) API:
+--
+-- * <https://www.twilio.com/docs/api/authy/authy-totp>
+
+
 type UserNew' =
   "protected"
     :> "json"
@@ -182,563 +292,6 @@ userNew'
   :: UserRequest
   -> Maybe Text
   -> ClientM UserResponse
-
-
-userNew
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => UserRequest
-  -> m (Either ServantError UserResponse)
-userNew a =
-  runWithKey $
-    userNew' a
-
-
--- |
---
---
-
-type Sms' =
-  "protected"
-    :> "json"
-    :> "sms"
-    :> Capture "authy_id" Text
-    :> QueryParam "action" Text
-    :> QueryParam "action_message" Text
-    :> QueryParam "force" Bool
-    :> AuthyAPIKey
-    :> Get '[JSON] SmsResponse
-
-
-sms'
-  :: Text
-  -> Maybe Text
-  -> Maybe Text
-  -> Maybe Bool
-  -> Maybe Text
-  -> ClientM SmsResponse
-
-
-sms
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => Text -- ^ Authy ID
-  -> Maybe Text -- ^ Action
-  -> Maybe Text -- ^ Action message
-  -> Maybe Bool -- ^ Force
-  -> m (Either ServantError SmsResponse)
-sms a b c d =
-  runWithKey $
-    sms' a b c d
-
-
--- |
---
---
-
-type Call' =
-  "protected"
-    :> "json"
-    :> "call"
-    :> Capture "authy_id" Text
-    :> QueryParam "action" Text
-    :> QueryParam "action_message" Text
-    :> QueryParam "force" Bool
-    :> AuthyAPIKey
-    :> Get '[JSON] SmsResponse
-
-
-call'
-  :: Text
-  -> Maybe Text
-  -> Maybe Text
-  -> Maybe Bool
-  -> Maybe Text
-  -> ClientM SmsResponse
-
-
-call
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => Text
-  -> Maybe Text
-  -> Maybe Text
-  -> Maybe Bool
-  -> m (Either ServantError SmsResponse)
-call a b c d =
-  runWithKey $
-    call' a b c d
-
-
--- |
---
---
-
-type Verify' =
-  "protected"
-    :> "json"
-    :> "verify"
-    :> Capture "token" Text
-    :> Capture "authy_id" Text
-    :> QueryParam "action" Text
-    :> QueryParam "force" Bool
-    :> AuthyAPIKey
-    :> Get '[JSON] VerifyResponse
-
-
-verify'
-  :: Text
-  -> Text
-  -> Maybe Text
-  -> Maybe Bool
-  -> Maybe Text
-  -> ClientM VerifyResponse
-
-
-verify
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => Text
-  -> Text
-  -> Maybe Text
-  -> Maybe Bool
-  -> m (Either ServantError VerifyResponse)
-verify a b c d =
-  runWithKey $
-    verify' a b c d
-
-
--- |
---
---
-
-type UserDelete' =
-  "protected"
-    :> "json"
-    :> "users"
-    :> Capture "user_id" Text
-    :> "delete"
-    :> QueryParam "user_ip" Text -- TODO or reqbody?
-    :> AuthyAPIKey
-    :> Post '[JSON] MessageResponse
-
-
-userDelete'
-  :: Text
-  -> Maybe Text -- Object?
-  -> Maybe Text
-  -> ClientM MessageResponse
-
-
-userDelete
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => Text
-  -> Maybe Text
-  -> m (Either ServantError MessageResponse)
-userDelete a b =
-  runWithKey $
-    userDelete' a b
-
-
--- |
---
---
-
-type UserRegisterActivity' =
-  "protected"
-    :> "json"
-    :> "users"
-    :> Capture "user_id" Text
-    :> "register_activity"
-    :> ReqBody '[JSON] UserActivity
-    :> AuthyAPIKey
-    :> Post '[JSON] MessageResponse
-
-
-userRegisterActivity'
-  :: Text
-  -> UserActivity
-  -> Maybe Text
-  -> ClientM MessageResponse
-
-
-userRegisterActivity
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => Text
-  -> UserActivity
-  -> m (Either ServantError MessageResponse)
-userRegisterActivity a b =
-  runWithKey $
-    userRegisterActivity' a b
-
-
--- |
---
---
-
-type AppDetails' =
-  "protected"
-    :> "json"
-    :> "app"
-    :> "details"
-    :> QueryParam "user_ip" Text
-    :> AuthyAPIKey
-    :> Get '[JSON] AppDetails
-
-
-appDetails'
-  :: Maybe Text
-  -> Maybe Text
-  -> ClientM AppDetails
-
-
-appDetails
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => Maybe Text
-  -> m (Either ServantError AppDetails)
-appDetails a =
-  runWithKey $
-    appDetails' a
-
-
--- |
---
---
-
-type UserStatus' =
-  "protected"
-    :> "json"
-    :> "users"
-    :> Capture "user_id" Text
-    :> "status"
-    :> QueryParam "user_ip" Text
-    :> AuthyAPIKey
-    :> Get '[JSON] UserStatus
-
-
-userStatus'
-  :: Text
-  -> Maybe Text
-  -> Maybe Text
-  -> ClientM UserStatus
-
-
-userStatus
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => Text
-  -> Maybe Text
-  -> m (Either ServantError UserStatus)
-userStatus a b =
-  runWithKey $
-    userStatus' a b
-
-
--- |
---
---
-
-type AppStats' =
-  "protected"
-    :> "json"
-    :> "app"
-    :> "stats"
-    :> AuthyAPIKey
-    :> Get '[JSON] AppStats
-
-
-appStats'
-  :: Maybe Text
-  -> ClientM AppStats
-
-
-appStats
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => m (Either ServantError AppStats)
-appStats =
-  runWithKey
-    appStats'
-
-
--- |
---
---
-
-type UserApprovalRequest' =
-  "onetouch"
-    :> "json"
-    :> "users"
-    :> Capture "authy_id" Text
-    :> "approval_requests"
-    :> ReqBody '[JSON] UserApprovalRequest
-    :> AuthyAPIKey
-    :> Post '[JSON] ApprovalRequest
-
-
-userApprovalRequest'
-  :: Text
-  -> UserApprovalRequest
-  -> Maybe Text
-  -> ClientM ApprovalRequest
-
-
-userApprovalRequest
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => Text
-  -> UserApprovalRequest
-  -> m (Either ServantError ApprovalRequest)
-userApprovalRequest a o =
-  runWithKey $
-    userApprovalRequest' a o
-
-
--- |
---
---
-
-type ApprovalRequest' =
-  "onetouch"
-    :> "json"
-    :> "approval_requests"
-    :> Capture "uuid" UUID
-    :> AuthyAPIKey
-    :> Get '[JSON] ApprovalReq
-
-
-approvalRequest'
-  :: UUID
-  -> Maybe Text
-  -> ClientM ApprovalReq
-
-
-approvalRequest
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => UUID
-  -> m (Either ServantError ApprovalReq)
-approvalRequest uuid =
-  runWithKey $
-    approvalRequest' uuid
-
-
--- |
---
---
-
-type PhoneVerificationStart' =
-  "protected"
-    :> "json"
-    :> "phones"
-    :> "verification"
-    :> "start"
-    :> ReqBody '[JSON] PhoneVerificationRequest
-    :> AuthyAPIKey
-    :> Post '[JSON] PhoneVerificationResponse
-
-
-phoneVerificationStart'
-  :: PhoneVerificationRequest
-  -> Maybe Text
-  -> ClientM PhoneVerificationResponse
-
-
-phoneVerificationStart
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => PhoneVerificationRequest
-  -> m (Either ServantError PhoneVerificationResponse)
-phoneVerificationStart phoneVerificationRequest =
-  runWithKey $
-    phoneVerificationStart' phoneVerificationRequest
-
-
--- |
---
---
-
-phoneVerificationStartCall
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => Integer -- ^ Country code
-  -> Text -- ^ Phone number
-  -> m (Either ServantError PhoneVerificationResponse)
-phoneVerificationStartCall countryCode phoneNumber =
-  phoneVerificationStart $
-    mkPhoneVerificationRequestCall countryCode phoneNumber
-
-
--- |
---
---
-
-phoneVerificationStartSMS
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => Integer -- ^ Country code
-  -> Text -- ^ Phone number
-  -> m (Either ServantError PhoneVerificationResponse)
-phoneVerificationStartSMS countryCode phoneNumber =
-  phoneVerificationStart $
-    mkPhoneVerificationRequestSMS countryCode phoneNumber
-
-
--- |
---
---
-
-type PhoneVerificationCheck' =
-  "protected"
-    :> "json"
-    :> "phones"
-    :> "verification"
-    :> "check"
-    :> QueryParam "country_code" Integer
-    :> QueryParam "phone_number" Text
-    :> QueryParam "verification_code" Text
-    :> AuthyAPIKey
-    :> Get '[JSON] Text
-
-
-phoneVerificationCheck'
-  :: Maybe Integer
-  -> Maybe Text
-  -> Maybe Text
-  -> Maybe Text
-  -> ClientM Text
-
-
-phoneVerificationCheck
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => Integer -- ^ Country code
-  -> Text -- ^ Phone number
-  -> Text -- ^ Verification code
-  -> m (Either ServantError Text)
-phoneVerificationCheck countryCode phoneNumber verificationCode =
-  runWithKey $
-    phoneVerificationCheck'
-      (Just countryCode)
-      (Just phoneNumber)
-      (Just verificationCode)
-
-
--- |
---
---
-
-type PhoneInfo' =
-  "protected"
-    :> "json"
-    :> "phones"
-    :> "info"
-    :> QueryParam "country_code" Integer -- required
-    :> QueryParam "phone_number" Text -- required
-    :> QueryParam "user_ip" Text -- optional
-    :> Header "X-Authy-API-Key" Text -- required
-    :> Get '[JSON] PhoneInfo
-
-
-phoneInfo'
-  :: Maybe Integer
-  -> Maybe Text
-  -> Maybe Text
-  -> Maybe Text
-  -> ClientM PhoneInfo
-
-
-phoneInfo
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => Integer -- ^ Country code
-  -> Text -- ^ Phone number
-  -> Maybe Text
-  -> m (Either ServantError PhoneInfo)
-phoneInfo countryCode phoneNumber userIP =
-  runWithKey $
-    phoneInfo'
-      (Just countryCode)
-      (Just phoneNumber)
-      userIP
-
-
--- |
---
---
-
-run
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => ClientM a
-  -> m (Either ServantError a)
-run clientM = do
-  manager <- asks (authyManager . getAuthy)
-  let
-    baseUrl =
-      BaseUrl Https "api.authy.com" 443 ""
-
-  liftIO $
-    runClientM clientM (ClientEnv manager baseUrl)
-
-
--- |
---
---
-
-runWithKey
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => (Maybe Text -> ClientM a)
-  -> m (Either ServantError a)
-runWithKey clientM = do
-  key <- asks (Just . authyKey . getAuthy)
-  run (clientM key)
-
-
--- |
---
---
-
-type AuthyAPIKey =
-  Header "X-Authy-API-Key" Text
-
-
--- |
---
---
-
-type API =
-    UserNew'
-  :<|>
-    Sms'
-  :<|>
-    Call'
-  :<|>
-    Verify'
-  :<|>
-    UserDelete'
-  :<|>
-    UserRegisterActivity'
-  :<|>
-    AppDetails'
-  :<|>
-    UserStatus'
-  :<|>
-    AppStats'
-  :<|>
-    UserApprovalRequest'
-  :<|>
-    ApprovalRequest'
-  :<|>
-    PhoneVerificationStart'
-  :<|>
-    PhoneVerificationCheck'
-  :<|>
-    PhoneInfo'
-
-
-userNew'
-  :<|> sms'
-  :<|> call'
-  :<|> verify'
-  :<|> userDelete'
-  :<|> userRegisterActivity'
-  :<|> appDetails'
-  :<|> userStatus'
-  :<|> appStats'
-  :<|> userApprovalRequest'
-  :<|> approvalRequest'
-  :<|> phoneVerificationStart'
-  :<|> phoneVerificationCheck'
-  :<|> phoneInfo'
-  =
-  client (Proxy :: Proxy API)
 
 
 -- |
@@ -804,14 +357,48 @@ instance FromJSON UserResponse where
 
 -- |
 --
+-- Create a user.
+
+createUser'
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => UserRequest
+  -> m (Either ServantError AuthyID)
+createUser' createUserRequest =
+  fmap (fmap (AuthyID . userId)) <$> runWithKey $
+    userNew' createUserRequest
+
+
+-- |
+--
+-- Create a user.
+
+createUser
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Maybe Bool -- ^ Installation link?
+  -> Text -- ^ User email
+  -> Integer -- ^ User country code
+  -> Text -- ^ Phone number
+  -> m (Either ServantError AuthyID) -- ^ User Authy ID
+createUser a b c d =
+  createUser'
+    UserRequest
+      { userRequestSendInstallLinkViaSms = a
+      , userEmail = b
+      , userCellphone = d
+      , userCountryCode = Text.pack (show c)
+      }
+
+
+-- |
+--
 --
 
-data SmsResponse =
-  SmsResponse
-    { smsResponseMessage :: Text
-    , smsResponseCellphone :: Text
-    , smsResponseIgnored :: Maybe Bool
-    , smsResponseDevice :: Maybe Text
+data RequestTokenResponse =
+  RequestTokenResponse
+    { requestTokenResponseMessage :: Text
+    , requestTokenResponseCellphone :: Text
+    , requestTokenResponseIgnored :: Maybe Bool
+    , requestTokenResponseDevice :: Maybe Text
     }
   deriving (Eq, Show)
 
@@ -820,15 +407,89 @@ data SmsResponse =
 --
 --
 
-instance FromJSON SmsResponse where
+instance FromJSON RequestTokenResponse where
   parseJSON =
     withObject "" $
       \o ->
-        SmsResponse
+        RequestTokenResponse
           <$> o .: "message"
           <*> o .: "cellphone"
           <*> o .:? "ignored"
           <*> o .:? "device"
+
+
+type Sms' =
+  "protected"
+    :> "json"
+    :> "sms"
+    :> Capture "authy_id" AuthyID
+    :> QueryParam "action" Text
+    :> QueryParam "action_message" Text
+    :> QueryParam "force" Bool
+    :> AuthyAPIKey
+    :> Get '[JSON] RequestTokenResponse
+
+
+sms'
+  :: AuthyID
+  -> Maybe Text
+  -> Maybe Text
+  -> Maybe Bool
+  -> Maybe Text
+  -> ClientM RequestTokenResponse
+
+
+-- |
+--
+-- Request a token via SMS.
+
+requestTokenViaSMS
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => AuthyID -- ^ User Authy ID
+  -> Maybe Text -- ^ Action
+  -> Maybe Text -- ^ Action message
+  -> Maybe Bool -- ^ Force SMS?
+  -> m (Either ServantError RequestTokenResponse)
+requestTokenViaSMS a b c d =
+  runWithKey $
+    sms' a b c d
+
+
+type Call' =
+  "protected"
+    :> "json"
+    :> "call"
+    :> Capture "authy_id" AuthyID
+    :> QueryParam "action" Text
+    :> QueryParam "action_message" Text
+    :> QueryParam "force" Bool
+    :> AuthyAPIKey
+    :> Get '[JSON] RequestTokenResponse
+
+
+call'
+  :: AuthyID
+  -> Maybe Text
+  -> Maybe Text
+  -> Maybe Bool
+  -> Maybe Text
+  -> ClientM RequestTokenResponse
+
+
+-- |
+--
+-- Request a token via phone call.
+
+requestTokenViaPhoneCall
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => AuthyID -- ^ User Authy ID
+  -> Maybe Text -- ^ Action
+  -> Maybe Text -- ^ Action message
+  -> Maybe Bool -- ^ Force phone call?
+  -> m (Either ServantError RequestTokenResponse)
+requestTokenViaPhoneCall a b c d =
+  runWithKey $
+    call' a b c d
 
 
 -- |
@@ -907,27 +568,75 @@ instance FromJSON VerifyDevice where
           <*> o .: "last_sync_date"
 
 
+type Verify' =
+  "protected"
+    :> "json"
+    :> "verify"
+    :> Capture "token" Token
+    :> Capture "authy_id" AuthyID
+    :> QueryParam "action" Text
+    :> QueryParam "force" Bool
+    :> AuthyAPIKey
+    :> Get '[JSON] VerifyResponse
+
+
+verify'
+  :: Token
+  -> AuthyID
+  -> Maybe Text
+  -> Maybe Bool
+  -> Maybe Text
+  -> ClientM VerifyResponse
+
+
 -- |
 --
---
+-- Verify a token.
 
-newtype MessageResponse =
-  MessageResponse
-    { messageResponseMessage :: Text
-    }
-  deriving (Eq, Show)
+verifyToken
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Token -- ^ Token
+  -> AuthyID -- ^ User Authy ID
+  -> Maybe Text -- ^ Action
+  -> Maybe Bool -- ^ Force validation?
+  -> m (Either ServantError VerifyResponse)
+verifyToken a b c d =
+  runWithKey $
+    verify' a b c d
+
+
+----------------------------------------------------------------------
+
+type UserDelete' =
+  "protected"
+    :> "json"
+    :> "users"
+    :> Capture "user_id" AuthyID
+    :> "delete"
+    :> QueryParam "user_ip" Text -- TODO or reqbody?
+    :> AuthyAPIKey
+    :> Post '[JSON] Message
+
+
+userDelete'
+  :: AuthyID
+  -> Maybe Text -- Object?
+  -> Maybe Text
+  -> ClientM Message
 
 
 -- |
 --
---
+-- Delete a user.
 
-instance FromJSON MessageResponse where
-  parseJSON =
-    withObject "" $
-      \o ->
-        MessageResponse
-          <$> o .: "message"
+deleteUser
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => AuthyID -- ^ User Authy ID
+  -> Maybe Text -- ^ User IP
+  -> m (Either ServantError Message)
+deleteUser authyID b =
+  runWithKey $
+    userDelete' authyID b
 
 
 -- |
@@ -986,6 +695,38 @@ instance ToJSON UserActivityType where
         "cookie_login"
 
 
+type UserRegisterActivity' =
+  "protected"
+    :> "json"
+    :> "users"
+    :> Capture "user_id" AuthyID
+    :> "register_activity"
+    :> ReqBody '[JSON] UserActivity
+    :> AuthyAPIKey
+    :> Post '[JSON] Message
+
+
+userRegisterActivity'
+  :: AuthyID
+  -> UserActivity
+  -> Maybe Text
+  -> ClientM Message
+
+
+-- |
+--
+-- Register user activity.
+
+registerUserActivity
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => AuthyID -- ^ User Authy ID
+  -> UserActivity -- ^ User activity
+  -> m (Either ServantError Message)
+registerUserActivity a b =
+  runWithKey $
+    userRegisterActivity' a b
+
+
 -- |
 --
 --
@@ -1023,6 +764,35 @@ instance FromJSON AppDetails where
               <*> o .: "plan"
               <*> o .: "phone_calls_enabled"
               <*> o .: "sms_enabled"
+
+
+type AppDetails' =
+  "protected"
+    :> "json"
+    :> "app"
+    :> "details"
+    :> QueryParam "user_ip" Text
+    :> AuthyAPIKey
+    :> Get '[JSON] AppDetails
+
+
+appDetails'
+  :: Maybe Text
+  -> Maybe Text
+  -> ClientM AppDetails
+
+
+-- |
+--
+--
+
+getApplicationDetails
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Maybe Text -- ^ User IP
+  -> m (Either ServantError AppDetails)
+getApplicationDetails a =
+  runWithKey $
+    appDetails' a
 
 
 -- |
@@ -1097,6 +867,38 @@ instance FromJSON DetailedDevice where
           <*> o .: "os_type"
 
 
+type UserStatus' =
+  "protected"
+    :> "json"
+    :> "users"
+    :> Capture "user_id" Text
+    :> "status"
+    :> QueryParam "user_ip" Text
+    :> AuthyAPIKey
+    :> Get '[JSON] UserStatus
+
+
+userStatus'
+  :: Text
+  -> Maybe Text
+  -> Maybe Text
+  -> ClientM UserStatus
+
+
+-- |
+--
+--
+
+getUserStatus
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Text
+  -> Maybe Text
+  -> m (Either ServantError UserStatus)
+getUserStatus a b =
+  runWithKey $
+    userStatus' a b
+
+
 -- |
 --
 --
@@ -1159,6 +961,43 @@ instance FromJSON MonthAppStats where
           <*> o .: "calls_count"
           <*> o .: "users_count"
           <*> o .: "sms_count"
+
+
+type AppStats' =
+  "protected"
+    :> "json"
+    :> "app"
+    :> "stats"
+    :> AuthyAPIKey
+    :> Get '[JSON] AppStats
+
+
+appStats'
+  :: Maybe Text
+  -> ClientM AppStats
+
+
+-- |
+--
+--
+
+getApplicationStats
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => m (Either ServantError AppStats)
+getApplicationStats =
+  runWithKey
+    appStats'
+
+
+----------------------------------------------------------------------
+-- * Authy OneTouch API
+----------------------------------------------------------------------
+
+-- $onetouch
+--
+-- Bindings for the Authy OneTouch API:
+--
+-- * <https://www.twilio.com/docs/api/authy/authy-onetouch-api>
 
 
 -- |
@@ -1266,6 +1105,38 @@ instance FromJSON ApprovalRequest where
               <$> o .: "uuid"
 
 
+type UserApprovalRequest' =
+  "onetouch"
+    :> "json"
+    :> "users"
+    :> Capture "authy_id" Text
+    :> "approval_requests"
+    :> ReqBody '[JSON] UserApprovalRequest
+    :> AuthyAPIKey
+    :> Post '[JSON] ApprovalRequest
+
+
+userApprovalRequest'
+  :: Text
+  -> UserApprovalRequest
+  -> Maybe Text
+  -> ClientM ApprovalRequest
+
+
+-- |
+--
+-- Create an approval request.
+
+createApprovalRequest
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Text
+  -> UserApprovalRequest
+  -> m (Either ServantError ApprovalRequest)
+createApprovalRequest a o =
+  runWithKey $
+    userApprovalRequest' a o
+
+
 -- |
 --
 --
@@ -1319,6 +1190,72 @@ instance FromJSON ApprovalReq where
               <*> o .: "app_id"
               <*> o .: "user_id"
               <*> o .: "_app_name"
+
+
+type ApprovalRequest' =
+  "onetouch"
+    :> "json"
+    :> "approval_requests"
+    :> Capture "uuid" UUID
+    :> AuthyAPIKey
+    :> Get '[JSON] ApprovalReq
+
+
+approvalRequest'
+  :: UUID
+  -> Maybe Text
+  -> ClientM ApprovalReq
+
+
+-- |
+--
+--
+
+checkApprovalRequest
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => UUID -- ^ Approval request UUID
+  -> m (Either ServantError ApprovalReq) -- ^ Approval request status
+checkApprovalRequest uuid =
+  runWithKey $
+    approvalRequest' uuid
+
+
+-- |
+--
+--
+
+verifyCallback
+  :: Text -- ^ Key
+  -> Text -- ^ Nonce
+  -> Text -- ^ HTTP method (GET or POST)
+  -> Text -- ^ Params
+  -> Text -- ^ url
+  -> Text -- ^ X-Authy-Signature
+  -> Bool
+verifyCallback key nonce httpMethod url sortedParams sig =
+  let
+    data_ =
+      Text.intercalate "|" [nonce, httpMethod, url, sortedParams]
+
+    digest :: HMAC SHA256
+    digest = hmac (encodeUtf8 key) (encodeUtf8 data_)
+
+    digest64 =
+      B64.encode (ByteString.pack (show (hmacGetDigest digest)))
+
+  in
+    digest64 == encodeUtf8 sig
+
+
+----------------------------------------------------------------------
+-- * Authy phone verification API
+----------------------------------------------------------------------
+
+-- $phone-verification
+--
+-- Bindings for the Authy phone verification API:
+--
+-- * <https://www.twilio.com/docs/api/authy/authy-phone-verification-api>
 
 
 -- |
@@ -1446,6 +1383,114 @@ instance FromJSON PhoneVerificationResponse where
           <*> o .: "seconds_to_expire"
 
 
+type PhoneVerificationStart' =
+  "protected"
+    :> "json"
+    :> "phones"
+    :> "verification"
+    :> "start"
+    :> ReqBody '[JSON] PhoneVerificationRequest
+    :> AuthyAPIKey
+    :> Post '[JSON] PhoneVerificationResponse
+
+
+phoneVerificationStart'
+  :: PhoneVerificationRequest
+  -> Maybe Text
+  -> ClientM PhoneVerificationResponse
+
+
+-- |
+--
+-- Request a phone verification code via SMS or phone call.
+
+requestPhoneVerificationCode
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => PhoneVerificationRequest
+  -> m (Either ServantError PhoneVerificationResponse)
+requestPhoneVerificationCode phoneVerificationRequest =
+  runWithKey $
+    phoneVerificationStart' phoneVerificationRequest
+
+
+-- |
+--
+-- Request a phone verification code via SMS.
+
+requestPhoneVerificationCodeViaSMS
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Integer -- ^ Country code
+  -> Text -- ^ Phone number
+  -> m (Either ServantError PhoneVerificationResponse)
+requestPhoneVerificationCodeViaSMS countryCode phoneNumber =
+  requestPhoneVerificationCode $
+    mkPhoneVerificationRequestSMS countryCode phoneNumber
+
+
+-- |
+--
+-- Request a phone verification code via phone call.
+
+requestPhoneVerificationCodeViaPhoneCall
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Integer -- ^ Country code
+  -> Text -- ^ Phone number
+  -> m (Either ServantError PhoneVerificationResponse)
+requestPhoneVerificationCodeViaPhoneCall countryCode phoneNumber =
+  requestPhoneVerificationCode $
+    mkPhoneVerificationRequestCall countryCode phoneNumber
+
+
+type PhoneVerificationCheck' =
+  "protected"
+    :> "json"
+    :> "phones"
+    :> "verification"
+    :> "check"
+    :> QueryParam "country_code" Integer
+    :> QueryParam "phone_number" Text
+    :> QueryParam "verification_code" Text
+    :> AuthyAPIKey
+    :> Get '[JSON] Text
+
+
+phoneVerificationCheck'
+  :: Maybe Integer
+  -> Maybe Text
+  -> Maybe Text
+  -> Maybe Text
+  -> ClientM Text
+
+
+-- |
+--
+-- Verify a phone verification code.
+
+verifyPhoneVerificationCode
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Integer -- ^ Country code
+  -> Text -- ^ Phone number
+  -> Text -- ^ Verification code
+  -> m (Either ServantError Text)
+verifyPhoneVerificationCode countryCode phoneNumber verificationCode =
+  runWithKey $
+    phoneVerificationCheck'
+      (Just countryCode)
+      (Just phoneNumber)
+      (Just verificationCode)
+
+
+----------------------------------------------------------------------
+-- * Authy phone intelligence API
+----------------------------------------------------------------------
+
+-- $phone-intelligence
+--
+-- Bindings for the Authy phone intelligence API:
+--
+-- * <https://www.twilio.com/docs/api/authy/authy-phone-intelligence-api>
+
+
 -- |
 --
 --
@@ -1510,28 +1555,134 @@ instance FromJSON PhoneType where
           _ -> fail ""
 
 
+type PhoneInfo' =
+  "protected"
+    :> "json"
+    :> "phones"
+    :> "info"
+    :> QueryParam "country_code" Integer -- required
+    :> QueryParam "phone_number" Text -- required
+    :> QueryParam "user_ip" Text -- optional
+    :> Header "X-Authy-API-Key" Text -- required
+    :> Get '[JSON] PhoneInfo
+
+
+phoneInfo'
+  :: Maybe Integer
+  -> Maybe Text
+  -> Maybe Text
+  -> Maybe Text
+  -> ClientM PhoneInfo
+
+
 -- |
 --
 --
 
-verifyCallback
-  :: Text -- ^ Key
-  -> Text -- ^ Nonce
-  -> Text -- ^ HTTP method (GET or POST)
-  -> Text -- ^ Params
-  -> Text -- ^ url
-  -> Text -- ^ X-Authy-Signature
-  -> Bool
-verifyCallback key nonce httpMethod url sortedParams sig =
+getPhoneInformation
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => Integer -- ^ Country code
+  -> Text -- ^ Phone number
+  -> Maybe Text
+  -> m (Either ServantError PhoneInfo)
+getPhoneInformation countryCode phoneNumber userIP =
+  runWithKey $
+    phoneInfo'
+      (Just countryCode)
+      (Just phoneNumber)
+      userIP
+
+
+----------------------------------------------------------------------
+--
+----------------------------------------------------------------------
+
+-- |
+--
+--
+
+run
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => ClientM a
+  -> m (Either ServantError a)
+run clientM = do
+  manager <- asks (authyManager . getAuthy)
   let
-    data_ =
-      Text.intercalate "|" [nonce, httpMethod, url, sortedParams]
+    baseUrl =
+      BaseUrl Https "api.authy.com" 443 ""
 
-    digest :: HMAC SHA256
-    digest = hmac (encodeUtf8 key) (encodeUtf8 data_)
+  liftIO $
+    runClientM clientM (ClientEnv manager baseUrl)
 
-    digest64 =
-      B64.encode (ByteString.pack (show (hmacGetDigest digest)))
 
-  in
-    digest64 == encodeUtf8 sig
+-- |
+--
+--
+
+runWithKey
+  :: (HasAuthy r, MonadIO m, MonadReader r m)
+  => (Maybe Text -> ClientM a)
+  -> m (Either ServantError a)
+runWithKey clientM = do
+  key <- asks (Just . authyKey . getAuthy)
+  run (clientM key)
+
+
+-- |
+--
+--
+
+type AuthyAPIKey =
+  Header "X-Authy-API-Key" Text
+
+
+-- |
+--
+--
+
+type API =
+    UserNew'
+  :<|>
+    Sms'
+  :<|>
+    Call'
+  :<|>
+    Verify'
+  :<|>
+    UserDelete'
+  :<|>
+    UserRegisterActivity'
+  :<|>
+    AppDetails'
+  :<|>
+    UserStatus'
+  :<|>
+    AppStats'
+  :<|>
+    UserApprovalRequest'
+  :<|>
+    ApprovalRequest'
+  :<|>
+    PhoneVerificationStart'
+  :<|>
+    PhoneVerificationCheck'
+  :<|>
+    PhoneInfo'
+
+
+userNew'
+  :<|> sms'
+  :<|> call'
+  :<|> verify'
+  :<|> userDelete'
+  :<|> userRegisterActivity'
+  :<|> appDetails'
+  :<|> userStatus'
+  :<|> appStats'
+  :<|> userApprovalRequest'
+  :<|> approvalRequest'
+  :<|> phoneVerificationStart'
+  :<|> phoneVerificationCheck'
+  :<|> phoneInfo'
+  =
+  client (Proxy :: Proxy API)
