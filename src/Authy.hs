@@ -15,7 +15,7 @@
 ----------------------------------------------------------------------
 
 module Authy
-  ( -- * Authy
+  ( -- * Got Authy?
     -- $authy
 
     Authy (..)
@@ -729,7 +729,7 @@ registerUserActivity a b =
 
 -- |
 --
---
+-- Application details.
 
 data AppDetails =
   AppDetails
