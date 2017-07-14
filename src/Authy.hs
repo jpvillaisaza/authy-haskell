@@ -19,7 +19,9 @@ module Authy
     -- $authy
 
     Authy (..)
-  , getAuthy'
+  , mkAuthy
+  , getAuthyAPIKey
+  , getManager
   , HasAuthy (..)
 
   , AuthyID (..)
@@ -138,7 +140,7 @@ import Data.UUID.Types (UUID)
 
 
 ----------------------------------------------------------------------
--- * Authy
+-- * Got Authy?
 ----------------------------------------------------------------------
 
 -- $authy
@@ -155,6 +157,18 @@ data Authy =
     { authyKey :: Text
     , authyManager :: Manager
     }
+
+
+-- |
+--
+--
+
+mkAuthy
+  :: Text -- ^ Authy API key
+  -> Manager
+  -> Authy
+mkAuthy authyKey authyManager =
+  Authy {..}
 
 
 -- |
@@ -187,21 +201,24 @@ instance HasAuthy (Text, Manager) where
 --
 --
 
-getAuthy' :: IO (Either Text Authy)
-getAuthy' = do
-  manager <- getGlobalManager
-  maybeKey <- lookupEnv "AUTHY_API_KEY"
-  return $
-    case maybeKey of
-      Nothing ->
-        Left ""
+getAuthyAPIKey :: IO (Maybe Text)
+getAuthyAPIKey =
+  fmap Text.pack <$> lookupEnv "AUTHY_API_KEY"
 
-      Just key ->
-        Right
-          Authy
-            { authyKey = Text.pack key
-            , authyManager = manager
-            }
+
+-- |
+--
+--
+
+getManager
+  :: Bool
+  -> IO Manager
+getManager global =
+  if global
+    then
+      getGlobalManager
+    else
+      newTlsManager
 
 
 -- |
