@@ -15,11 +15,13 @@
 ----------------------------------------------------------------------
 
 module Authy
-  ( -- * Authy
+  ( -- * Got Authy?
     -- $authy
 
     Authy (..)
-  , getAuthy'
+  , mkAuthy
+  , getAuthyAPIKey
+  , getManager
   , HasAuthy (..)
 
   , AuthyID (..)
@@ -138,7 +140,7 @@ import Data.UUID.Types (UUID)
 
 
 ----------------------------------------------------------------------
--- * Authy
+-- * Got Authy?
 ----------------------------------------------------------------------
 
 -- $authy
@@ -155,6 +157,18 @@ data Authy =
     { authyKey :: Text
     , authyManager :: Manager
     }
+
+
+-- |
+--
+--
+
+mkAuthy
+  :: Text -- ^ Authy API key
+  -> Manager
+  -> Authy
+mkAuthy authyKey authyManager =
+  Authy {..}
 
 
 -- |
@@ -187,21 +201,24 @@ instance HasAuthy (Text, Manager) where
 --
 --
 
-getAuthy' :: IO (Either Text Authy)
-getAuthy' = do
-  manager <- getGlobalManager
-  maybeKey <- lookupEnv "AUTHY_API_KEY"
-  return $
-    case maybeKey of
-      Nothing ->
-        Left ""
+getAuthyAPIKey :: IO (Maybe Text)
+getAuthyAPIKey =
+  fmap Text.pack <$> lookupEnv "AUTHY_API_KEY"
 
-      Just key ->
-        Right
-          Authy
-            { authyKey = Text.pack key
-            , authyManager = manager
-            }
+
+-- |
+--
+--
+
+getManager
+  :: Bool
+  -> IO Manager
+getManager global =
+  if global
+    then
+      getGlobalManager
+    else
+      newTlsManager
 
 
 -- |
@@ -213,6 +230,15 @@ newtype AuthyID =
     { unAuthyID :: Integer
     }
   deriving (Eq, Num, Ord, Show)
+
+
+-- |
+--
+--
+
+instance FromJSON AuthyID where
+  parseJSON =
+    fmap AuthyID . parseJSON
 
 
 -- |
@@ -278,32 +304,32 @@ instance ToHttpApiData Token where
 -- * <https://www.twilio.com/docs/api/authy/authy-totp>
 
 
-type UserNew' =
+type CreateUser' =
   "protected"
     :> "json"
     :> "users"
     :> "new"
-    :> ReqBody '[JSON] UserRequest
+    :> ReqBody '[JSON] CreateUserRequest
     :> AuthyAPIKey
-    :> Post '[JSON] UserResponse
+    :> Post '[JSON] CreateUserResponse
 
 
-userNew'
-  :: UserRequest
+createUser'
+  :: CreateUserRequest
   -> Maybe Text
-  -> ClientM UserResponse
+  -> ClientM CreateUserResponse
 
 
 -- |
 --
 --
 
-data UserRequest =
-  UserRequest
-    { userRequestSendInstallLinkViaSms :: Maybe Bool
-    , userEmail :: Text
-    , userCellphone :: Text
-    , userCountryCode :: Text
+data CreateUserRequest =
+  CreateUserRequest
+    { createUserInstallationLink :: Maybe Bool
+    , createUserEmail :: Text
+    , createUserCountryCode :: Integer
+    , createUserPhoneNumber :: Text
     }
 
 
@@ -311,18 +337,18 @@ data UserRequest =
 --
 --
 
-instance ToJSON UserRequest where
-  toJSON UserRequest {..} =
+instance ToJSON CreateUserRequest where
+  toJSON CreateUserRequest {..} =
     object
-      [ "send_install_link_via_sms" .= userRequestSendInstallLinkViaSms
+      [ "send_install_link_via_sms" .= createUserInstallationLink
       , "user" .= userObject
       ]
     where
       userObject =
         object
-          [ "email" .= userEmail
-          , "cellphone" .= userCellphone
-          , "country_code" .= userCountryCode
+          [ "email" .= createUserEmail
+          , "cellphone" .= createUserPhoneNumber
+          , "country_code" .= Text.pack (show createUserCountryCode)
           ]
 
 
@@ -330,9 +356,9 @@ instance ToJSON UserRequest where
 --
 --
 
-data UserResponse =
-  UserResponse
-    { userId :: Integer
+newtype CreateUserResponse =
+  CreateUserResponse
+    { createUserAuthyID :: AuthyID
     }
   deriving (Eq, Show)
 
@@ -341,7 +367,7 @@ data UserResponse =
 --
 --
 
-instance FromJSON UserResponse where
+instance FromJSON CreateUserResponse where
   parseJSON =
     withObject "" $
       \o -> do
@@ -351,21 +377,8 @@ instance FromJSON UserResponse where
       parseJSON' =
         withObject "" $
           \o ->
-            UserResponse
+            CreateUserResponse
               <$> o .: "id"
-
-
--- |
---
--- Create a user.
-
-createUser'
-  :: (HasAuthy r, MonadIO m, MonadReader r m)
-  => UserRequest
-  -> m (Either ServantError AuthyID)
-createUser' createUserRequest =
-  fmap (fmap (AuthyID . userId)) <$> runWithKey $
-    userNew' createUserRequest
 
 
 -- |
@@ -379,15 +392,21 @@ createUser
   -> Integer -- ^ User country code
   -> Text -- ^ Phone number
   -> m (Either ServantError AuthyID) -- ^ User Authy ID
-createUser a b c d =
-  createUser'
-    UserRequest
-      { userRequestSendInstallLinkViaSms = a
-      , userEmail = b
-      , userCellphone = d
-      , userCountryCode = Text.pack (show c)
-      }
+createUser link email countryCode phoneNumber = do
+  eitherCreateUserResponse <-
+    runWithKey $
+      createUser'
+        CreateUserRequest
+          { createUserInstallationLink = link
+          , createUserEmail = email
+          , createUserCountryCode = countryCode
+          , createUserPhoneNumber = phoneNumber
+          }
 
+  return (fmap createUserAuthyID eitherCreateUserResponse)
+
+
+----------------------------------------------------------------------
 
 -- |
 --
@@ -491,6 +510,8 @@ requestTokenViaPhoneCall a b c d =
   runWithKey $
     call' a b c d
 
+
+----------------------------------------------------------------------
 
 -- |
 --
@@ -639,6 +660,8 @@ deleteUser authyID b =
     userDelete' authyID b
 
 
+----------------------------------------------------------------------
+
 -- |
 --
 --
@@ -727,9 +750,11 @@ registerUserActivity a b =
     userRegisterActivity' a b
 
 
+----------------------------------------------------------------------
+
 -- |
 --
---
+-- Application details.
 
 data AppDetails =
   AppDetails
@@ -794,6 +819,8 @@ getApplicationDetails a =
   runWithKey $
     appDetails' a
 
+
+----------------------------------------------------------------------
 
 -- |
 --
@@ -898,6 +925,8 @@ getUserStatus a b =
   runWithKey $
     userStatus' a b
 
+
+----------------------------------------------------------------------
 
 -- |
 --
@@ -1137,6 +1166,8 @@ createApprovalRequest a o =
     userApprovalRequest' a o
 
 
+----------------------------------------------------------------------
+
 -- |
 --
 --
@@ -1219,6 +1250,8 @@ checkApprovalRequest uuid =
   runWithKey $
     approvalRequest' uuid
 
+
+----------------------------------------------------------------------
 
 -- |
 --
@@ -1441,6 +1474,8 @@ requestPhoneVerificationCodeViaPhoneCall countryCode phoneNumber =
     mkPhoneVerificationRequestCall countryCode phoneNumber
 
 
+----------------------------------------------------------------------
+
 type PhoneVerificationCheck' =
   "protected"
     :> "json"
@@ -1641,7 +1676,7 @@ type AuthyAPIKey =
 --
 
 type API =
-    UserNew'
+    CreateUser'
   :<|>
     Sms'
   :<|>
@@ -1670,7 +1705,7 @@ type API =
     PhoneInfo'
 
 
-userNew'
+createUser'
   :<|> sms'
   :<|> call'
   :<|> verify'
